@@ -1,0 +1,183 @@
+import 'package:cbslqminidisplay/messages/notification.dart';
+import 'package:mqtt_client/mqtt_client.dart';
+import 'package:mqtt_client/mqtt_server_client.dart';
+
+class MQTTService {
+  // The main MQTT client instance
+  static late MqttServerClient client;
+
+  // Callback function to handle received messages
+  static Function(String)? _messageCallback;
+
+  // Callback when disconnected
+  static Function()? _onDisconnected;
+
+  // Callback when connected
+  static Function()? _onConnected;
+
+  // Ensures we only attach the listener once
+  static bool _isListening = false;
+
+  // Stores the current subscribed topic
+  static String? _currentTopic;
+
+  // Prevents multiple reconnection attempts at once
+  static bool _isReconnecting = false;
+
+  /// Connect to the MQTT broker
+  static Future<MqttServerClient> connect() async {
+    print("⏳ Waiting 3 seconds before connecting...");
+    await Future.delayed(const Duration(seconds: 3)); // <-- delay before connection
+
+    // Create client with broker IP and unique client ID
+    client = MqttServerClient(
+      '192.168.1.189', // broker IP
+      'flutter_client_${DateTime.now().millisecondsSinceEpoch}', // unique client ID
+    );
+
+    client.port = 1883; // default MQTT port
+    client.logging(on: false); // disable logging
+    client.keepAlivePeriod = 20; // keep-alive in seconds
+
+    // When connected
+    client.onConnected = () {
+      print('✅ Connected to MQTT broker');
+      if (_onConnected != null) {
+        _onConnected!();
+      }
+    };
+
+    // When disconnected
+    client.onDisconnected = () {
+      print('❌ Disconnected from MQTT broker');
+      if (_onDisconnected != null) {
+        _onDisconnected!();
+      }
+    };
+
+    // Try to connect
+    try {
+      await client.connect();
+      _setupMessageListener(); // start listening for incoming messages
+    } catch (e) {
+      print('⚠️ Connection failed: $e');
+      client.disconnect();
+      throw Exception('MQTT Connection failed: $e');
+    }
+    return client;
+  }
+
+  /// Setup listener for incoming messages
+  static void _setupMessageListener() {
+    if (!_isListening) {
+      client.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
+        // Extract the payload (message)
+        final recMess = c[0].payload as MqttPublishMessage;
+        final topic = c[0].topic;
+        final message =
+            MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+
+        print('📩 Received message on topic $topic: $message');
+
+        // Call the callback with the message
+        if (_messageCallback != null) {
+          _messageCallback!(message);
+        }
+      });
+
+      _isListening = true;
+      print('🔊 Message listener setup complete');
+    }
+  }
+
+  /// Subscribe to a topic
+  static void subscribe(String topic, Function(String) onMessage) {
+    print('📡 Attempting to subscribe to: $topic');
+    _messageCallback = onMessage;
+    _currentTopic = topic;
+    client.subscribe(topic, MqttQos.atMostOnce); // QoS 0 = at most once
+    print('✅ Subscribed to: $topic');
+  }
+
+  /// Set callback when disconnected
+  static void setOnDisconnected(Function() callback) {
+    _onDisconnected = callback;
+  }
+
+  /// Set callback when connected
+  static void setOnConnected(Function() callback) {
+    _onConnected = callback;
+  }
+
+  /// Check if client is currently connected
+  static bool isConnected() {
+    return client.connectionStatus?.state == MqttConnectionState.connected;
+  }
+
+  /// Try to reconnect to the broker
+  static Future<void> reconnect() async {
+    if (_isReconnecting) return; // avoid duplicate reconnections
+    _isReconnecting = true;
+
+    try {
+      client.disconnect();
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Re-create client with new ID
+      client = MqttServerClient(
+        '192.168.1.189',
+        'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      client.port = 1883;
+      client.logging(on: false);
+      client.keepAlivePeriod = 20;
+
+      // Set callbacks again
+      client.onConnected = () {
+        print('✅ Connected to MQTT broker');
+        _isReconnecting = false;
+        if (_onConnected != null) {
+          _onConnected!();
+        }
+      };
+      client.onDisconnected = () {
+        print('❌ Disconnected from MQTT broker');
+        if (!_isReconnecting && _onDisconnected != null) {
+          _onDisconnected!();
+        }
+      };
+
+      // Attempt reconnect
+      await client.connect();
+
+      // Reset listener and resubscribe
+      _isListening = false;
+      _setupMessageListener();
+
+      if (_currentTopic != null && _messageCallback != null) {
+        client.subscribe(_currentTopic!, MqttQos.atMostOnce);
+        print('✅ Reconnected and resubscribed to: $_currentTopic');
+      }
+    } catch (e) {
+      _isReconnecting = false;
+      print('⚠️ Reconnection failed: $e');
+      throw Exception('Reconnection failed: $e');
+    }
+  }
+
+  /// Publish a request for the next token
+  static void requestNextToken() {
+    final requestMessage = '{"action": "getNextToken"}';
+
+    final builder = MqttClientPayloadBuilder();
+    builder.addString(requestMessage);
+
+    client.publishMessage(
+      'QMS/2/4/NEXT_TOKEN_REQUEST', // topic
+      MqttQos.atMostOnce, // QoS 0
+      builder.payload!,
+    );
+
+    print('📤 Requested next token from broker');
+  }
+}
