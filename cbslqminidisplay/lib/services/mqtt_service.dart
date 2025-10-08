@@ -19,11 +19,10 @@ class MQTTService {
     await Future.delayed(const Duration(seconds: 15));
 
     client = MqttServerClient(
-      '192.168.63.100',
-      // '192.168.1.189',
+      '1.1.1.1',
       'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
     );
-    client.port = 1883;
+    client.port = 1000;
     client.logging(on: false);
     client.keepAlivePeriod = 20;
 
@@ -87,52 +86,6 @@ class MQTTService {
   static bool isConnected() {
     return client.connectionStatus?.state == MqttConnectionState.connected;
   }
-
-  // static Future<void> reconnect() async {
-  //   if (_isReconnecting) return;
-  //   _isReconnecting = true;
-
-  //   try {
-  //     client.disconnect();
-  //     await Future.delayed(Duration(milliseconds: 500));
-
-  //     client = MqttServerClient(
-  //       // '192.168.63.100',
-  //       '192.168.1.189',
-  //       'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
-  //     );
-  //     client.port = 1883;
-  //     client.logging(on: false);
-  //     client.keepAlivePeriod = 20;
-
-  //     client.onConnected = () {
-  //       print('✅ Connected to MQTT broker');
-  //       _isReconnecting = false;
-  //       if (_onConnected != null) {
-  //         _onConnected!();
-  //       }
-  //     };
-  //     client.onDisconnected = () {
-  //       print('❌ Disconnected from MQTT broker');
-  //       if (!_isReconnecting && _onDisconnected != null) {
-  //         _onDisconnected!();
-  //       }
-  //     };
-
-  //     await client.connect();
-  //     _isListening = false;
-  //     _setupMessageListener();
-
-  //     if (_currentTopic != null && _messageCallback != null) {
-  //       client.subscribe(_currentTopic!, MqttQos.atMostOnce);
-  //       print('✅ Reconnected and resubscribed to: $_currentTopic');
-  //     }
-  //   } catch (e) {
-  //     _isReconnecting = false;
-  //     print('⚠️ Reconnection failed: $e');
-  //     throw Exception('Reconnection failed: $e');
-  //   }
-  // }
 
   static Future<void> reconnectAndResubscribe() async {
     if (_isReconnecting) return;
