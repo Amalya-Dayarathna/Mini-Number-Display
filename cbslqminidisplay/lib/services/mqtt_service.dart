@@ -5,7 +5,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 
 class MQTTService {
   static late MqttServerClient client;
-  static Function(String)? _messageCallback;
+  static Function(String, String)? _messageCallback;
   static Function()? _onDisconnected;
   static Function()? _onConnected;
   static bool _isListening = false;
@@ -19,10 +19,10 @@ class MQTTService {
     await Future.delayed(const Duration(seconds: 15));
 
     client = MqttServerClient(
-      '1.1.1.1',
+      '100.0.0.0',
       'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
     );
-    client.port = 1000;
+    client.port = 100;
     client.logging(on: false);
     client.keepAlivePeriod = 20;
 
@@ -59,7 +59,7 @@ class MQTTService {
             MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
         print('📩 Received message on topic $topic: $message');
         if (_messageCallback != null) {
-          _messageCallback!(message);
+          _messageCallback!(message, topic);
         }
       });
       _isListening = true;
@@ -67,12 +67,22 @@ class MQTTService {
     }
   }
 
-  static void subscribe(String topic, Function(String) onMessage) {
+  static void subscribe(String topic, Function(String, String) onMessage) {
     print('📡 Attempting to subscribe to: $topic');
     _messageCallback = onMessage;
     _currentTopic = topic;
     client.subscribe(topic, MqttQos.atMostOnce);
     print('✅ Subscribed to: $topic');
+  }
+
+  static void subscribeToMultiple(
+      List<String> topics, Function(String, String) onMessage) {
+    print('📡 Attempting to subscribe to multiple topics: $topics');
+    _messageCallback = onMessage;
+    for (String topic in topics) {
+      client.subscribe(topic, MqttQos.atMostOnce);
+      print('✅ Subscribed to: $topic');
+    }
   }
 
   static void setOnDisconnected(Function() callback) {
@@ -99,11 +109,10 @@ class MQTTService {
         await Future.delayed(const Duration(seconds: 2));
 
         client = MqttServerClient(
-          // '192.168.1.189',
-          '192.168.63.100',
+          '100.0.0.0',
           'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
         );
-        client.port = 1883;
+        client.port = 100;
         client.logging(on: false);
         client.keepAlivePeriod = 20;
 

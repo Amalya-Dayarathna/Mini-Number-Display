@@ -20,8 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // To keep the reconnection attempts in check
   Timer? _connectionChecker;
 
-  // Mqtt topic
-  String? _mqttTopic;
+  // Mqtt topics for token display
+  List<String>? _mqttTopics;
 
   // To avoid spamming error messages
   bool _hasShownRetryMessage = false;
@@ -40,14 +40,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _connectMQTT() async {
     try {
-      // Load topic from file
-      _mqttTopic = await TopicStorage.loadTopic();
+      // Load all token topics from file
+      _mqttTopics = await TopicStorage.loadAllTokenTopics();
 
-      if (_mqttTopic == null || _mqttTopic!.isEmpty) {
-        print("⚠️ No topic found in topic.txt. Cannot subscribe.");
+      if (_mqttTopics == null || _mqttTopics!.isEmpty) {
+        print("⚠️ No topics found in topic.txt. Cannot subscribe.");
 
         MessageUtils.showErrorMessage(context,
-            'No MQTT topic found for this tab. Please check topic.txt');
+            'No MQTT topics found for this tab. Please check topic.txt');
 
         //_startConnectionChecker();
       }
@@ -94,24 +94,27 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
 
-      print('📡 Subscribing to topic: $_mqttTopic');
-      MQTTService.subscribe(_mqttTopic!, (message) {
-        final tokenNumber = TokenParser.extractToken(message);
-
-        print('📝 TOKEN RECEIVED: $tokenNumber');
-        //MessageUtils.showSuccessMessage(context, 'Payload: $message');
-
-        if (tokenNumber != null && mounted) {
-          // MessageUtils.showSuccessMessage(context, 'TOKEN RECEIVED:  $message');
-
-          print('🔄 Updating UI with token: $tokenNumber');
+      print('📡 Subscribing to topics: $_mqttTopics');
+      MQTTService.subscribeToMultiple(_mqttTopics!, (message, topic) {
+        if (topic.endsWith('BREAK_RESPONSE')) {
+          print('🔄 Updating UI with CLOSED for BREAK_RESPONSE');
           setState(() {
-            number = tokenNumber;
+            number = 'CLOSED';
           });
         } else {
-          MessageUtils.showErrorMessage(
-              context, 'No token extracted from message');
-          print('❌ No token extracted from message');
+          final tokenNumber = TokenParser.extractToken(message);
+          print('📝 TOKEN RECEIVED: $tokenNumber');
+
+          if (tokenNumber != null && mounted) {
+            print('🔄 Updating UI with token: $tokenNumber');
+            setState(() {
+              number = tokenNumber;
+            });
+          } else {
+            MessageUtils.showErrorMessage(
+                context, 'No token extracted from message');
+            print('❌ No token extracted from message');
+          }
         }
       });
     } catch (e) {

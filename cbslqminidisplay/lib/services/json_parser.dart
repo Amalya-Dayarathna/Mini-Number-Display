@@ -4,6 +4,14 @@ class TokenParser {
   static String? extractToken(String message) {
     try {
       print('🔍 Parsing message: $message');
+
+      // Check if message contains break/close keywords
+      // final lowerMessage = message.toLowerCase();
+      // if (lowerMessage.contains('break') || lowerMessage.contains('close')) {
+      //   print('🛑 Break/Close detected, returning 0000');
+      //   return '0000';
+      // }
+
       final Map<String, dynamic> result = jsonDecode(message);
 
       if (result['isSuccess'] == true) {
